@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Screenplay Formatter</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="wordmark">FORMAT.</p>
+          <p class="tagline">Paste messy. Copy clean.</p>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel panel-input" aria-labelledby="input-heading">
+          <div class="panel-chrome">
+            <div>
+              <p class="panel-label" id="input-heading">Raw Input</p>
+              <p class="panel-hint">Unformatted draft</p>
+            </div>
+          </div>
+
+          <div class="input-stage">
+            <div class="input-ghost" aria-hidden="true">
+              <p>int apartment night</p>
+              <p>mara</p>
+              <p>(quietly)</p>
+              <p>this is where the clean version begins</p>
+            </div>
+
+            <label class="sr-only" for="raw-input">Paste screenplay text</label>
+            <textarea
+              id="raw-input"
+              class="input-area"
+              placeholder="Paste your messy screenplay text here..."
+              spellcheck="false"
+            ></textarea>
+          </div>
+
+          <div class="panel-footer panel-footer--input">
+            <button class="format-button" data-format-trigger type="button">
+              <span class="format-button__label">Format</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel panel-output" aria-labelledby="output-heading">
+          <div class="panel-chrome">
+            <div>
+              <p class="panel-label" id="output-heading">Formatted Output</p>
+              <p class="panel-hint">Copy-ready screenplay</p>
+            </div>
+            <button id="copy-button" class="copy-button" type="button" disabled>
+              Copy
+            </button>
+          </div>
+
+          <section id="formatter-note" class="formatter-note" aria-live="polite" hidden>
+            <p class="formatter-note__label">Formatter Note</p>
+            <p id="formatter-note-text" class="formatter-note__text"></p>
+          </section>
+
+          <div id="output-panel" class="output-panel is-empty" aria-live="polite">
+            <div class="screenplay screenplay-preview" aria-hidden="true">
+              <p class="screenplay-line screenplay-line--scene">INT. APARTMENT - NIGHT</p>
+              <p class="screenplay-line screenplay-line--action">Moonlight washes over a cluttered desk as a half-finished script waits to be rescued.</p>
+              <p class="screenplay-line screenplay-line--character">MARA</p>
+              <p class="screenplay-line screenplay-line--parenthetical">(quietly)</p>
+              <p class="screenplay-line screenplay-line--dialogue">This is where the clean version begins.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="mobile-action-bar">
+      <button class="format-button format-button--mobile" data-format-trigger type="button">
+        <span class="format-button__label">Format</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite">
+      Copied to clipboard
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
