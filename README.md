@@ -2,6 +2,8 @@
 
 `format.` is a screenplay formatting tool for turning rough, messy script text into clean, readable screenplay structure.
 
+![format. example output](./example-output.png)
+
 Paste unformatted text into the left panel, run the formatter, and get:
 
 - a polished screenplay preview
