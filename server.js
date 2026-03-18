@@ -169,8 +169,8 @@ function createCeltxPdfBuffer(blocks) {
       size: "LETTER",
       margin: 72,
       info: {
-        Title: "Formatted Screenplay",
-        Author: "Screenplay Formatter",
+        Title: "format.",
+        Author: "format.",
       },
     });
     const chunks = [];
@@ -307,7 +307,7 @@ app.post("/api/format", async (req, res) => {
       formatterNote: String(parsed.formatterNote || ""),
     });
   } catch (error) {
-    console.error("Format API error:", error);
+    console.error("format. API error:", error);
     return res.status(500).json({ error: "Server failed to format screenplay." });
   }
 });
@@ -324,7 +324,7 @@ app.post("/api/export/celtx-pdf", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="formatted-screenplay-celtx.pdf"',
+      'attachment; filename="format-celtx.pdf"',
     );
 
     return res.send(pdfBuffer);

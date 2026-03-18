@@ -295,7 +295,7 @@ function buildWordHtml(blocks) {
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Screenplay Export</title>
+    <title>format.</title>
   </head>
   <body>
     <div style="font-family:'Courier New', Courier, monospace;font-size:12pt;line-height:1.5;color:#111;width:6.5in;margin:0 auto;">
@@ -415,7 +415,7 @@ async function downloadCeltxPdf() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "formatted-screenplay-celtx.pdf";
+    link.download = "format-celtx.pdf";
     document.body.append(link);
     link.click();
     link.remove();
