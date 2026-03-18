@@ -4,11 +4,17 @@ const formatterNote = document.querySelector("#formatter-note");
 const formatterNoteText = document.querySelector("#formatter-note-text");
 const outputPanel = document.querySelector("#output-panel");
 const copyButton = document.querySelector("#copy-button");
+const downloadCeltxButton = document.querySelector("#download-celtx-button");
 const toast = document.querySelector("#toast");
 const formatButtons = [...document.querySelectorAll("[data-format-trigger]")];
 
 const previewMarkup = outputPanel.innerHTML;
-let latestOutput = "";
+const emptyExportState = {
+  blocks: [],
+  plainTextScreenplay: "",
+};
+
+let exportState = { ...emptyExportState };
 let lastFormattedSource = "";
 let toastTimer = 0;
 let copyPulseTimer = 0;
@@ -16,9 +22,17 @@ let copyPulseTimer = 0;
 const sceneHeadingPattern =
   /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|EST\.|INT -|EXT -|INTERIOR|EXTERIOR)/i;
 const transitionPattern = /^(FADE OUT|FADE IN|CUT TO:|DISSOLVE TO:|SMASH CUT TO:)/i;
+const validBlockTypes = new Set([
+  "scene_heading",
+  "action",
+  "character",
+  "parenthetical",
+  "dialogue",
+  "transition",
+]);
 
 function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => {
+  return String(value).replace(/[&<>"']/g, (char) => {
     const entities = {
       "&": "&amp;",
       "<": "&lt;",
@@ -32,12 +46,12 @@ function escapeHtml(value) {
 }
 
 function normalizeParenthetical(line) {
-  const cleaned = line.trim().replace(/^\(+/, "").replace(/\)+$/, "");
+  const cleaned = String(line).trim().replace(/^\(+/, "").replace(/\)+$/, "");
   return `(${cleaned})`;
 }
 
 function isCharacterName(line) {
-  const trimmed = line.trim();
+  const trimmed = String(line).trim();
 
   if (!trimmed || trimmed.length > 32) {
     return false;
@@ -54,19 +68,44 @@ function isCharacterName(line) {
   return /[A-Z]/.test(trimmed);
 }
 
+function normalizeBlockType(type) {
+  const value = String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  const aliases = {
+    scene: "scene_heading",
+    slugline: "scene_heading",
+    sceneheader: "scene_heading",
+    scene_heading: "scene_heading",
+    character_name: "character",
+    dialogue_line: "dialogue",
+    dialog: "dialogue",
+  };
+
+  const normalized = aliases[value] || value;
+  return validBlockTypes.has(normalized) ? normalized : "action";
+}
+
+function getVisualType(type) {
+  const normalized = normalizeBlockType(type);
+  return normalized === "scene_heading" ? "scene" : normalized;
+}
+
 function classifyLine(line, inDialogueBlock) {
-  const trimmed = line.trim();
+  const trimmed = String(line).trim();
 
   if (!trimmed) {
     return { type: "spacer", text: "" };
   }
 
   if (sceneHeadingPattern.test(trimmed)) {
-    return { type: "scene", text: trimmed.toUpperCase() };
+    return { type: "scene_heading", text: trimmed.toUpperCase() };
   }
 
   if (transitionPattern.test(trimmed)) {
-    return { type: "scene", text: trimmed.toUpperCase() };
+    return { type: "transition", text: trimmed.toUpperCase() };
   }
 
   if (/^\(.*\)$/.test(trimmed)) {
@@ -84,7 +123,7 @@ function classifyLine(line, inDialogueBlock) {
   return { type: "action", text: trimmed };
 }
 
-function renderScreenplayHtml(text) {
+function fallbackBlocksFromText(text) {
   const sourceLines = String(text || "").split(/\r?\n/);
   const blocks = [];
   let inDialogueBlock = false;
@@ -104,22 +143,69 @@ function renderScreenplayHtml(text) {
       block.type === "parenthetical" ||
       block.type === "dialogue";
 
-    if (block.type === "scene" || block.type === "action") {
+    if (
+      block.type === "scene_heading" ||
+      block.type === "action" ||
+      block.type === "transition"
+    ) {
       inDialogueBlock = false;
     }
   });
 
-  const html = blocks
+  return blocks;
+}
+
+function normalizeBlocks(blocks, fallbackText = "") {
+  if (Array.isArray(blocks) && blocks.length) {
+    return blocks
+      .map((block) => {
+        if (!block || typeof block !== "object") {
+          return null;
+        }
+
+        const type = normalizeBlockType(block.type);
+        const text = String(block.text || "").trim();
+
+        if (!text) {
+          return null;
+        }
+
+        return { type, text };
+      })
+      .filter(Boolean);
+  }
+
+  return fallbackBlocksFromText(fallbackText)
+    .filter((block) => block.type !== "spacer")
+    .map((block) => ({
+      type: normalizeBlockType(block.type),
+      text: block.text,
+    }));
+}
+
+function renderScreenplayBlocksHtml(blocks) {
+  const items = Array.isArray(blocks) ? blocks : [];
+  const html = items
     .map((block) => {
-      if (block.type === "spacer") {
-        return '<p class="screenplay-line screenplay-line--spacer" aria-hidden="true"></p>';
+      if (!block || typeof block !== "object") {
+        return "";
       }
 
-      return `<p class="screenplay-line screenplay-line--${block.type}">${escapeHtml(block.text)}</p>`;
+      const visualType = getVisualType(block.type);
+      return `<p class="screenplay-line screenplay-line--${visualType}">${escapeHtml(block.text)}</p>`;
     })
     .join("");
 
   return `<div class="screenplay">${html}</div>`;
+}
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+  }, 1800);
 }
 
 function setLoadingState(isLoading) {
@@ -149,6 +235,13 @@ function renderFormatterNote(note) {
   formatterNoteText.textContent = hasNote ? note : "";
 }
 
+function syncExportControls() {
+  const hasPlainText = Boolean(exportState.plainTextScreenplay);
+  const hasBlocks = Array.isArray(exportState.blocks) && exportState.blocks.length > 0;
+  copyButton.disabled = !(hasBlocks && hasPlainText);
+  downloadCeltxButton.disabled = !hasBlocks;
+}
+
 function pulseCopyButton() {
   copyButton.classList.remove("is-attention");
   window.clearTimeout(copyPulseTimer);
@@ -159,14 +252,57 @@ function pulseCopyButton() {
   }, 1900);
 }
 
+function resetExportState() {
+  exportState = { ...emptyExportState };
+  syncExportControls();
+}
+
 function renderPreview() {
-  latestOutput = "";
   lastFormattedSource = "";
   renderFormatterNote("");
+  resetExportState();
   outputPanel.className = "output-panel is-empty";
   outputPanel.innerHTML = previewMarkup;
-  copyButton.disabled = true;
   copyButton.classList.remove("is-attention");
+}
+
+function buildWordHtml(blocks) {
+  const paragraphStyles = {
+    scene_heading:
+      "margin:0 0 12pt 0;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;",
+    action: "margin:0 0 12pt 0;",
+    character:
+      "margin:24pt 0 6pt 2.2in;width:2.1in;text-transform:uppercase;letter-spacing:0.12em;",
+    parenthetical: "margin:0 0 6pt 1.9in;width:2.5in;font-style:italic;",
+    dialogue: "margin:0 0 12pt 1.45in;width:3.5in;",
+    transition:
+      "margin:0 0 12pt auto;width:2.1in;text-align:right;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;",
+  };
+
+  const paragraphs = (Array.isArray(blocks) ? blocks : [])
+    .map((block) => {
+      if (!block || typeof block !== "object") {
+        return "";
+      }
+
+      const type = normalizeBlockType(block.type);
+      const style = paragraphStyles[type] || paragraphStyles.action;
+      return `<p style="${style}">${escapeHtml(block.text)}</p>`;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Screenplay Export</title>
+  </head>
+  <body>
+    <div style="font-family:'Courier New', Courier, monospace;font-size:12pt;line-height:1.5;color:#111;width:6.5in;margin:0 auto;">
+      ${paragraphs}
+    </div>
+  </body>
+</html>`;
 }
 
 async function renderFormattedOutput() {
@@ -180,6 +316,9 @@ async function renderFormattedOutput() {
 
   setLoadingState(true);
   renderFormatterNote("");
+  resetExportState();
+  copyButton.classList.remove("is-attention");
+  outputPanel.classList.remove("is-stale");
 
   try {
     const response = await fetch("/api/format", {
@@ -196,42 +335,95 @@ async function renderFormattedOutput() {
       throw new Error(data?.error || "Formatting failed.");
     }
 
-    latestOutput = String(data.formattedScript || "");
+    const plainTextScreenplay = String(data.plainTextScreenplay || "");
+    const blocks = normalizeBlocks(data.blocks, plainTextScreenplay);
+    exportState = {
+      blocks,
+      plainTextScreenplay,
+    };
     lastFormattedSource = source;
     renderFormatterNote(String(data.formatterNote || ""));
     outputPanel.className = "output-panel";
-    outputPanel.innerHTML = renderScreenplayHtml(latestOutput);
-    copyButton.disabled = !latestOutput;
+    outputPanel.innerHTML = renderScreenplayBlocksHtml(blocks);
+    syncExportControls();
     pulseCopyButton();
   } catch (error) {
     console.error(error);
-    latestOutput = "";
     lastFormattedSource = "";
     renderFormatterNote("The formatter lost its composure. Try again.");
+    resetExportState();
     outputPanel.className = "output-panel";
     outputPanel.innerHTML =
       '<div class="screenplay"><p class="screenplay-line screenplay-line--action">Formatting failed.</p></div>';
-    copyButton.disabled = true;
     copyButton.classList.remove("is-attention");
   } finally {
     setLoadingState(false);
   }
 }
 
-async function copyFormattedOutput() {
-  if (!latestOutput) {
+async function copyForWord() {
+  if (!exportState.blocks.length || !exportState.plainTextScreenplay) {
+    return;
+  }
+
+  const html = buildWordHtml(exportState.blocks);
+
+  try {
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      const item = new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([exportState.plainTextScreenplay], {
+          type: "text/plain",
+        }),
+      });
+
+      await navigator.clipboard.write([item]);
+      showToast("Copied for Word");
+      return;
+    }
+
+    await navigator.clipboard.writeText(exportState.plainTextScreenplay);
+    showToast("HTML clipboard unavailable, copied plain text");
+  } catch (error) {
+    console.error("Word copy failed:", error);
+    showToast("Word copy failed");
+  }
+}
+
+async function downloadCeltxPdf() {
+  if (!exportState.blocks.length) {
     return;
   }
 
   try {
-    await navigator.clipboard.writeText(latestOutput);
-    toast.classList.add("is-visible");
-    window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => {
-      toast.classList.remove("is-visible");
-    }, 1800);
+    const response = await fetch("/api/export/celtx-pdf", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        blocks: exportState.blocks,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.error || "PDF export failed.");
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "formatted-screenplay-celtx.pdf";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("Downloaded PDF for Celtx");
   } catch (error) {
-    console.error("Clipboard write failed:", error);
+    console.error("Celtx PDF download failed:", error);
+    showToast("Celtx PDF export failed");
   }
 }
 
@@ -239,7 +431,8 @@ formatButtons.forEach((button) => {
   button.addEventListener("click", renderFormattedOutput);
 });
 
-copyButton.addEventListener("click", copyFormattedOutput);
+copyButton.addEventListener("click", copyForWord);
+downloadCeltxButton.addEventListener("click", downloadCeltxPdf);
 
 rawInput.addEventListener("input", () => {
   const source = rawInput.value.trim();
@@ -247,13 +440,15 @@ rawInput.addEventListener("input", () => {
   if (!source) {
     renderPreview();
   } else {
-    copyButton.disabled = source !== lastFormattedSource || !latestOutput;
+    const matchesCurrent = source === lastFormattedSource;
     copyButton.classList.remove("is-attention");
 
-    if (lastFormattedSource && source !== lastFormattedSource) {
-      outputPanel.classList.add("is-stale");
-    } else {
+    if (matchesCurrent) {
+      syncExportControls();
       outputPanel.classList.remove("is-stale");
+    } else {
+      resetExportState();
+      outputPanel.classList.add("is-stale");
     }
   }
 
@@ -261,5 +456,6 @@ rawInput.addEventListener("input", () => {
   syncInputState();
 });
 
+resetExportState();
 refreshButtonState();
 syncInputState();

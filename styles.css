@@ -264,6 +264,12 @@ body::before {
   text-transform: uppercase;
 }
 
+.output-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .copy-button.is-attention {
   animation: copyPulse 0.9s ease 2;
 }
@@ -369,6 +375,15 @@ body::before {
   margin-left: auto;
   margin-right: auto;
   font-style: italic;
+}
+
+.screenplay-line--transition {
+  width: min(100%, 24ch);
+  margin-left: auto;
+  text-align: right;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .screenplay-line--spacer {
@@ -487,8 +502,13 @@ body::before {
     padding: 18px 18px 16px;
   }
 
+  .output-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .copy-button {
-    margin-left: auto;
+    margin-left: 0;
     padding: 9px 12px;
     font-size: 0.76rem;
   }
